@@ -1,0 +1,69 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Gesture AV Controller</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <header>
+    <h1>Gesture AV Controller</h1>
+    <p class="subtitle">Real-time hand gesture recognition for AV control</p>
+  </header>
+
+  <main>
+    <div class="video-wrapper">
+      <video id="webcam" autoplay playsinline muted></video>
+      <canvas id="overlay"></canvas>
+
+      <div id="status-badge" class="badge badge--idle">Initializing…</div>
+    </div>
+
+    <div class="panel">
+      <div class="gesture-display">
+        <div id="gesture-icon" class="gesture-icon">—</div>
+        <div id="gesture-label" class="gesture-label">No gesture</div>
+        <div id="confidence-bar-wrap" class="confidence-wrap">
+          <div id="confidence-bar" class="confidence-bar"></div>
+        </div>
+        <div id="confidence-text" class="confidence-text">0%</div>
+      </div>
+
+      <div class="av-action-display">
+        <h2>AV Action</h2>
+        <div id="av-action" class="av-action">—</div>
+        <div id="volume-display" class="volume-display">
+          <span>Volume</span>
+          <div class="volume-bar-wrap">
+            <div id="volume-bar" class="volume-bar" style="width: 50%"></div>
+          </div>
+          <span id="volume-value">50</span>
+        </div>
+      </div>
+
+      <div class="gesture-legend">
+        <h2>Gesture Map</h2>
+        <table>
+          <tr><td>✌️</td><td><strong>V sign</strong></td><td>Activate volume control</td></tr>
+          <tr><td>👍</td><td><strong>Thumbs up</strong></td><td>Volume up</td></tr>
+          <tr><td>👎</td><td><strong>Thumbs down</strong></td><td>Volume down</td></tr>
+        </table>
+      </div>
+    </div>
+  </main>
+
+  <footer>
+    <p>Built by Carlos Rolan · AV Technician @ EPO Munich ·
+      <a href="https://github.com/carlosrolan/av_gesture" target="_blank">GitHub</a>
+    </p>
+  </footer>
+
+  <!-- Dependencies loaded from CDN — no backend required -->
+  <script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands/hands.js" crossorigin="anonymous"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js" crossorigin="anonymous"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@mediapipe/drawing_utils/drawing_utils.js" crossorigin="anonymous"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@4.20.0/dist/tf.min.js"></script>
+  <script src="main.js"></script>
+</body>
+</html>

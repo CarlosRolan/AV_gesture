@@ -1,0 +1,28 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+dist/
+build/
+
+# Data — captured landmarks (large, personal; regenerate locally)
+data/*.csv
+
+# Trained model — generated artefacts
+model/gesture_model.keras
+model/tfjs_model/
+
+# Keep label_map.json and tfjs_model once trained (uncomment when ready to commit)
+# !model/label_map.json
+# !model/tfjs_model/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Editor
+.vscode/
+.idea/
+*.swp

@@ -1,0 +1,8 @@
+mediapipe>=0.10.9
+opencv-python>=4.9.0
+tensorflow>=2.15.0
+tensorflowjs>=4.17.0
+scikit-learn>=1.4.0
+pandas>=2.2.0
+numpy>=1.26.0
+gradio>=4.26.0
