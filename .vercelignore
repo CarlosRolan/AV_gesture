@@ -1,0 +1,6 @@
+# Python — not part of the web deploy
+requirements.txt
+gradio_demo.py
+scripts/
+data/
+model/
