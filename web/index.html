@@ -7,51 +7,75 @@
   <link rel="stylesheet" href="style.css" />
 </head>
 <body>
+
   <header>
     <h1>Gesture AV Controller</h1>
-    <p class="subtitle">Real-time hand gesture recognition for AV control</p>
+    <p class="subtitle">Real-time hand gesture recognition — no server required</p>
   </header>
 
   <main>
+    <!-- ── Live camera ─────────────────────────────────────────────────── -->
     <div class="video-wrapper">
       <video id="webcam" autoplay playsinline muted></video>
       <canvas id="overlay"></canvas>
-
       <div id="status-badge" class="badge badge--idle">Initializing…</div>
     </div>
 
+    <!-- ── Right panel ────────────────────────────────────────────────── -->
     <div class="panel">
+
+      <!-- Detected gesture -->
       <div class="gesture-display">
         <div id="gesture-icon" class="gesture-icon">—</div>
         <div id="gesture-label" class="gesture-label">No gesture</div>
-        <div id="confidence-bar-wrap" class="confidence-wrap">
+        <div class="confidence-wrap">
           <div id="confidence-bar" class="confidence-bar"></div>
         </div>
         <div id="confidence-text" class="confidence-text">0%</div>
       </div>
 
+      <!-- AV action + volume -->
       <div class="av-action-display">
         <h2>AV Action</h2>
         <div id="av-action" class="av-action">—</div>
-        <div id="volume-display" class="volume-display">
+        <div class="volume-display">
           <span>Volume</span>
           <div class="volume-bar-wrap">
-            <div id="volume-bar" class="volume-bar" style="width: 50%"></div>
+            <div id="volume-bar" class="volume-bar" style="width:50%"></div>
           </div>
           <span id="volume-value">50</span>
         </div>
       </div>
 
+      <!-- Audio player -->
+      <div class="audio-player">
+        <h2>Demo Track</h2>
+        <p class="audio-hint">▶ Press play, then use 👍 / 👎 to control volume</p>
+        <audio id="demo-audio" controls loop src="the_mountain-latin-487015.mp3"></audio>
+      </div>
+
+      <!-- Gesture legend -->
       <div class="gesture-legend">
         <h2>Gesture Map</h2>
         <table>
-          <tr><td>✌️</td><td><strong>V sign</strong></td><td>Activate volume control</td></tr>
+          <tr><td>✌️</td><td><strong>V sign</strong></td><td>Take a photo</td></tr>
           <tr><td>👍</td><td><strong>Thumbs up</strong></td><td>Volume up</td></tr>
           <tr><td>👎</td><td><strong>Thumbs down</strong></td><td>Volume down</td></tr>
         </table>
       </div>
-    </div>
+
+    </div><!-- /.panel -->
   </main>
+
+  <!-- ── Photo modal ──────────────────────────────────────────────────── -->
+  <div id="photo-modal" class="modal-overlay" role="dialog" aria-modal="true" aria-label="Captured photo">
+    <div class="modal-card">
+      <button id="modal-close" class="modal-close" aria-label="Close">✕</button>
+      <h3 class="modal-title">📸 Photo captured!</h3>
+      <img id="photo-preview" class="photo-preview" alt="Captured gesture snapshot" />
+      <a id="photo-download" class="btn-download">⬇ Download PNG</a>
+    </div>
+  </div>
 
   <footer>
     <p>Built by Carlos Rolan · AV Technician @ EPO Munich ·
@@ -59,11 +83,7 @@
     </p>
   </footer>
 
-  <!-- Dependencies loaded from CDN — no backend required -->
-  <script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands/hands.js" crossorigin="anonymous"></script>
-  <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js" crossorigin="anonymous"></script>
-  <script src="https://cdn.jsdelivr.net/npm/@mediapipe/drawing_utils/drawing_utils.js" crossorigin="anonymous"></script>
-  <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@4.20.0/dist/tf.min.js"></script>
-  <script src="main.js"></script>
+  <!-- Single ES-module entry point — no other scripts needed -->
+  <script type="module" src="main.js"></script>
 </body>
 </html>

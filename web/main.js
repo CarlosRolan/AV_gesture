@@ -1,33 +1,20 @@
 /**
- * main.js — Gesture AV Controller (client-side inference)
+ * main.js — Gesture AV Controller
  *
- * Pipeline:
- *  1. MediaPipe Hands → 21 landmarks x,y,z
- *  2. Normalise landmarks (same as Python capture_dataset.py)
- *  3. TF.js model → gesture class + confidence
- *  4. Map gesture → AV action (volume control)
+ * Uses MediaPipe Tasks Vision GestureRecognizer (runs entirely in the browser).
+ * No server, no custom model file — Google's model is fetched from CDN.
+ *
+ * Gestures:
+ *   ✌️  Victory     → capture photo + download modal
+ *   👍  Thumb_Up    → audio volume up
+ *   👎  Thumb_Down  → audio volume down
  */
 
-// ── Config ────────────────────────────────────────────────────────────────
-const MODEL_URL         = "../model/tfjs_model/model.json";
-const LABEL_MAP_URL     = "../model/label_map.json";
-const CONFIDENCE_THRESH = 0.80;   // below this → "no gesture"
-const VOLUME_STEP       = 5;      // percent per thumbs gesture trigger
-const GESTURE_DEBOUNCE_MS = 600;  // ms between consecutive AV actions
-
-// ── AV action map ─────────────────────────────────────────────────────────
-const AV_ACTIONS = {
-  v_sign:      { label: "Volume Control Mode",  icon: "✌️",  action: activateVolumeMode },
-  thumbs_up:   { label: "Volume ▲",            icon: "👍",  action: volumeUp           },
-  thumbs_down: { label: "Volume ▼",            icon: "👎",  action: volumeDown         },
-};
-
-// ── State ─────────────────────────────────────────────────────────────────
-let model       = null;
-let labelMap    = {};
-let volume      = 50;
-let volumeMode  = false;
-let lastActionTime = 0;
+import {
+  GestureRecognizer,
+  FilesetResolver,
+  DrawingUtils,
+} from "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@latest/vision_bundle.js";
 
 // ── DOM refs ──────────────────────────────────────────────────────────────
 const videoEl        = document.getElementById("webcam");
@@ -38,69 +25,123 @@ const gestureIcon    = document.getElementById("gesture-icon");
 const gestureLabel   = document.getElementById("gesture-label");
 const confidenceBar  = document.getElementById("confidence-bar");
 const confidenceText = document.getElementById("confidence-text");
-const avAction       = document.getElementById("av-action");
-const volumeBar      = document.getElementById("volume-bar");
-const volumeValue    = document.getElementById("volume-value");
+const avActionEl     = document.getElementById("av-action");
+const volumeBarEl    = document.getElementById("volume-bar");
+const volumeValueEl  = document.getElementById("volume-value");
+const audioEl        = document.getElementById("demo-audio");
+const photoModal     = document.getElementById("photo-modal");
+const photoPreview   = document.getElementById("photo-preview");
+const photoDownload  = document.getElementById("photo-download");
+const modalClose     = document.getElementById("modal-close");
 
-// ── Normalisation (mirrors Python capture_dataset.py) ─────────────────────
-function normalizeLandmarks(landmarks) {
-  // landmarks: [{x, y, z}, ...] (21 points, normalised to [0,1] by MediaPipe)
-  const ox = landmarks[0].x;
-  const oy = landmarks[0].y;
-  const oz = landmarks[0].z;
+// ── Config ────────────────────────────────────────────────────────────────
+const VOLUME_STEP         = 0.05;   // 5% per gesture trigger
+const GESTURE_DEBOUNCE_MS = 700;    // minimum ms between consecutive actions
+const MODEL_URL =
+  "https://storage.googleapis.com/mediapipe-models/gesture_recognizer/gesture_recognizer/float16/1/gesture_recognizer.task";
 
-  const pts = landmarks.map(p => [p.x - ox, p.y - oy, p.z - oz]);
+// ── State ─────────────────────────────────────────────────────────────────
+let gestureRecognizer = null;
+let drawingUtils      = null;
+let lastActionTime    = 0;
+let modalOpen         = false;
 
-  const maxDist = Math.max(...pts.slice(1).map(
-    ([x, y, z]) => Math.sqrt(x * x + y * y + z * z)
-  )) || 1;
+// ── Gesture → action map ──────────────────────────────────────────────────
+const GESTURE_MAP = {
+  Victory:    { icon: "✌️", label: "V-Sign",      action: capturePhoto },
+  Thumb_Up:   { icon: "👍", label: "Thumbs Up",   action: volumeUp    },
+  Thumb_Down: { icon: "👎", label: "Thumbs Down", action: volumeDown  },
+};
 
-  return pts.flatMap(([x, y, z]) => [x / maxDist, y / maxDist, z / maxDist]);
-}
-
-// ── AV Actions ────────────────────────────────────────────────────────────
-function activateVolumeMode() {
-  volumeMode = true;
-  setAvAction("Volume control mode ACTIVE");
-}
-
+// ── Audio & volume ─────────────────────────────────────────────────────────
 function volumeUp() {
-  if (!volumeMode) return;
-  volume = Math.min(100, volume + VOLUME_STEP);
-  setAvAction(`Volume ▲  ${volume}`);
-  updateVolumeUI();
+  audioEl.volume = Math.min(1, audioEl.volume + VOLUME_STEP);
+  syncVolumeUI();
+  setAvAction(`Volume ▲  ${Math.round(audioEl.volume * 100)}%`);
 }
 
 function volumeDown() {
-  if (!volumeMode) return;
-  volume = Math.max(0, volume - VOLUME_STEP);
-  setAvAction(`Volume ▼  ${volume}`);
-  updateVolumeUI();
+  audioEl.volume = Math.max(0, audioEl.volume - VOLUME_STEP);
+  syncVolumeUI();
+  setAvAction(`Volume ▼  ${Math.round(audioEl.volume * 100)}%`);
 }
 
+function syncVolumeUI() {
+  const pct = Math.round(audioEl.volume * 100);
+  volumeBarEl.style.width   = `${pct}%`;
+  volumeValueEl.textContent = pct;
+}
+
+// Keep volume bar in sync if user drags the native audio control
+audioEl.addEventListener("volumechange", syncVolumeUI);
+
+// ── Photo capture ─────────────────────────────────────────────────────────
+function capturePhoto() {
+  if (modalOpen) return; // don't stack captures
+
+  // Draw the clean video frame (no landmark overlay) into a temporary canvas
+  const snap = document.createElement("canvas");
+  snap.width  = videoEl.videoWidth;
+  snap.height = videoEl.videoHeight;
+  snap.getContext("2d").drawImage(videoEl, 0, 0);
+
+  const dataUrl = snap.toDataURL("image/png");
+  photoPreview.src        = dataUrl;
+  photoDownload.href      = dataUrl;
+  photoDownload.download  = `gesture-snap-${Date.now()}.png`;
+
+  photoModal.classList.add("visible");
+  modalOpen = true;
+  setAvAction("📸 Foto capturada!");
+}
+
+function closeModal() {
+  photoModal.classList.remove("visible");
+  modalOpen = false;
+}
+
+modalClose.addEventListener("click", closeModal);
+photoModal.addEventListener("click", (e) => {
+  if (e.target === photoModal) closeModal();
+});
+document.addEventListener("keydown", (e) => {
+  if (e.key === "Escape") closeModal();
+});
+
+// ── UI helpers ────────────────────────────────────────────────────────────
 function setAvAction(text) {
-  avAction.textContent = text;
-  avAction.classList.add("flash");
-  setTimeout(() => avAction.classList.remove("flash"), 400);
+  avActionEl.textContent = text;
+  avActionEl.classList.remove("flash");
+  void avActionEl.offsetWidth; // force reflow to restart animation
+  avActionEl.classList.add("flash");
 }
 
-function updateVolumeUI() {
-  volumeBar.style.width  = `${volume}%`;
-  volumeValue.textContent = volume;
+function clearGestureUI() {
+  gestureIcon.textContent    = "—";
+  gestureLabel.textContent   = "No gesture";
+  confidenceBar.style.width  = "0%";
+  confidenceText.textContent = "0%";
 }
 
-// ── Gesture handling ──────────────────────────────────────────────────────
-function handleGesture(gestureKey, confidence) {
-  const info = AV_ACTIONS[gestureKey];
-  if (!info) return;
+// ── Gesture handler ───────────────────────────────────────────────────────
+function handleGesture(name, score) {
+  const info = GESTURE_MAP[name];
+  if (!info) {
+    clearGestureUI();
+    statusBadge.textContent = "Listening…";
+    statusBadge.className   = "badge badge--ready";
+    return;
+  }
 
-  gestureIcon.textContent  = info.icon;
-  gestureLabel.textContent = info.label;
+  // Update gesture display
+  gestureIcon.textContent    = info.icon;
+  gestureLabel.textContent   = info.label;
+  confidenceBar.style.width  = `${Math.round(score * 100)}%`;
+  confidenceText.textContent = `${Math.round(score * 100)}%`;
+  statusBadge.textContent    = "Gesture detected";
+  statusBadge.className      = "badge badge--active";
 
-  const pct = Math.round(confidence * 100);
-  confidenceBar.style.width  = `${pct}%`;
-  confidenceText.textContent = `${pct}%`;
-
+  // Trigger action with debounce
   const now = Date.now();
   if (now - lastActionTime >= GESTURE_DEBOUNCE_MS) {
     info.action();
@@ -108,106 +149,99 @@ function handleGesture(gestureKey, confidence) {
   }
 }
 
-function clearGestureUI() {
-  gestureIcon.textContent  = "—";
-  gestureLabel.textContent = "No gesture";
-  confidenceBar.style.width  = "0%";
-  confidenceText.textContent = "0%";
-}
-
-// ── Inference ─────────────────────────────────────────────────────────────
-async function runInference(landmarks) {
-  if (!model) return;
-
-  const input  = normalizeLandmarks(landmarks);
-  const tensor = tf.tensor2d([input]);
-
-  const predictions = await model.predict(tensor).data();
-  tensor.dispose();
-
-  const maxIdx    = predictions.indexOf(Math.max(...predictions));
-  const maxConf   = predictions[maxIdx];
-  const label     = labelMap[maxIdx];
-
-  if (maxConf >= CONFIDENCE_THRESH && label) {
-    handleGesture(label, maxConf);
-    statusBadge.textContent  = "Gesture detected";
-    statusBadge.className    = "badge badge--active";
-  } else {
-    clearGestureUI();
-    statusBadge.textContent = "Listening…";
-    statusBadge.className   = "badge badge--ready";
-  }
-}
-
-// ── MediaPipe Hands setup ─────────────────────────────────────────────────
-function setupMediaPipe() {
-  const hands = new Hands({
-    locateFile: (file) =>
-      `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${file}`,
-  });
-
-  hands.setOptions({
-    maxNumHands:            1,
-    modelComplexity:        1,
-    minDetectionConfidence: 0.7,
-    minTrackingConfidence:  0.5,
-  });
-
-  hands.onResults((results) => {
-    // Sync canvas size to video
-    canvasEl.width  = videoEl.videoWidth;
-    canvasEl.height = videoEl.videoHeight;
+// ── Detection loop (requestAnimationFrame) ────────────────────────────────
+function detect() {
+  // Wait until video has actual frame data
+  if (videoEl.readyState >= 2) {
+    // Keep canvas in sync with video dimensions
+    if (canvasEl.width  !== videoEl.videoWidth)  canvasEl.width  = videoEl.videoWidth;
+    if (canvasEl.height !== videoEl.videoHeight) canvasEl.height = videoEl.videoHeight;
     ctx.clearRect(0, 0, canvasEl.width, canvasEl.height);
 
-    if (!results.multiHandLandmarks?.length) {
-      clearGestureUI();
-      if (model) {
-        statusBadge.textContent = "Listening…";
-        statusBadge.className   = "badge badge--ready";
+    const results = gestureRecognizer.recognizeForVideo(videoEl, performance.now());
+
+    // Draw hand landmarks on the overlay canvas
+    if (results.landmarks?.length) {
+      for (const landmarks of results.landmarks) {
+        drawingUtils.drawConnectors(
+          landmarks,
+          GestureRecognizer.HAND_CONNECTIONS,
+          { color: "#00e5ff", lineWidth: 2 }
+        );
+        drawingUtils.drawLandmarks(landmarks, {
+          color: "#7c3aed",
+          lineWidth: 1,
+          radius: 4,
+        });
       }
-      return;
     }
 
-    const landmarks = results.multiHandLandmarks[0];
-
-    // Draw landmarks
-    drawConnectors(ctx, landmarks, HAND_CONNECTIONS, { color: "#00e5ff", lineWidth: 2 });
-    drawLandmarks(ctx,  landmarks, { color: "#7c3aed", lineWidth: 1, radius: 4 });
-
-    runInference(landmarks);
-  });
-
-  const camera = new Camera(videoEl, {
-    onFrame: async () => { await hands.send({ image: videoEl }); },
-    width: 1280,
-    height: 720,
-  });
-
-  camera.start().then(() => {
-    if (model) {
-      statusBadge.textContent = "Ready";
+    // Process top gesture (ignore "None" — no recognisable gesture)
+    const topGesture = results.gestures?.[0]?.[0];
+    if (topGesture && topGesture.categoryName !== "None") {
+      handleGesture(topGesture.categoryName, topGesture.score);
+    } else {
+      clearGestureUI();
+      statusBadge.textContent = "Listening…";
       statusBadge.className   = "badge badge--ready";
     }
-  });
+  }
+
+  requestAnimationFrame(detect);
 }
 
 // ── Boot ──────────────────────────────────────────────────────────────────
 async function init() {
   statusBadge.textContent = "Loading model…";
+  statusBadge.className   = "badge badge--idle";
 
   try {
-    [model, labelMap] = await Promise.all([
-      tf.loadLayersModel(MODEL_URL),
-      fetch(LABEL_MAP_URL).then(r => r.json()),
-    ]);
-    console.log("Model loaded. Labels:", labelMap);
-  } catch (err) {
-    console.warn("Model not found — running in demo mode (no inference).", err);
-    statusBadge.textContent = "Demo mode (no model)";
-  }
+    // 1. Resolve MediaPipe WASM binaries from CDN
+    const vision = await FilesetResolver.forVisionTasks(
+      "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@latest/wasm"
+    );
 
-  setupMediaPipe();
+    // 2. Create GestureRecognizer — model is fetched from Google's CDN
+    gestureRecognizer = await GestureRecognizer.createFromOptions(vision, {
+      baseOptions: {
+        modelAssetPath: MODEL_URL,
+        delegate: "GPU",
+      },
+      runningMode:                  "VIDEO",
+      numHands:                     1,
+      minHandDetectionConfidence:   0.7,
+      minHandPresenceConfidence:    0.5,
+      minTrackingConfidence:        0.5,
+    });
+
+    drawingUtils = new DrawingUtils(ctx);
+
+    // 3. Request camera access
+    statusBadge.textContent = "Requesting camera…";
+    const stream = await navigator.mediaDevices.getUserMedia({
+      video: { width: { ideal: 1280 }, height: { ideal: 720 }, facingMode: "user" },
+      audio: false,
+    });
+
+    videoEl.srcObject = stream;
+
+    // 4. Start detection loop once the first frame is ready
+    videoEl.addEventListener("loadeddata", () => {
+      statusBadge.textContent = "Listening…";
+      statusBadge.className   = "badge badge--ready";
+      detect();
+    }, { once: true });
+
+  } catch (err) {
+    console.error("Init error:", err);
+    statusBadge.textContent = err.name === "NotAllowedError"
+      ? "Camera permission denied"
+      : "Failed to load";
+    statusBadge.className = "badge badge--idle";
+  }
 }
 
-document.addEventListener("DOMContentLoaded", init);
+// ── Initialise volume UI and boot ─────────────────────────────────────────
+audioEl.volume = 0.5;
+syncVolumeUI();
+init();

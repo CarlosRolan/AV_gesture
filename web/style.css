@@ -82,6 +82,7 @@ main {
 
 #overlay { pointer-events: none; }
 
+/* Status badge */
 .badge {
   position: absolute;
   top: 10px;
@@ -91,6 +92,7 @@ main {
   font-size: 0.8rem;
   font-weight: 600;
   backdrop-filter: blur(6px);
+  transition: background 0.3s, color 0.3s;
 }
 
 .badge--idle    { background: rgba(107,114,128,.7); color: #fff; }
@@ -109,6 +111,7 @@ main {
 
 .gesture-display,
 .av-action-display,
+.audio-player,
 .gesture-legend {
   background: var(--surface);
   border: 1px solid var(--border);
@@ -156,6 +159,7 @@ main {
 
 /* AV action display */
 .av-action-display h2,
+.audio-player h2,
 .gesture-legend h2 {
   font-size: 0.8rem;
   text-transform: uppercase;
@@ -171,6 +175,17 @@ main {
   min-height: 2rem;
 }
 
+/* Flash animation for AV action text */
+@keyframes flash-in {
+  0%   { opacity: 0; transform: translateY(-4px); }
+  100% { opacity: 1; transform: translateY(0); }
+}
+
+.av-action.flash {
+  animation: flash-in 0.25s ease forwards;
+}
+
+/* Volume bar */
 .volume-display {
   display: flex;
   align-items: center;
@@ -192,7 +207,7 @@ main {
   height: 100%;
   background: linear-gradient(90deg, var(--accent2), var(--green));
   border-radius: 999px;
-  transition: width 0.3s ease;
+  transition: width 0.25s ease;
 }
 
 #volume-value {
@@ -201,7 +216,23 @@ main {
   color: var(--text);
 }
 
-/* Gesture legend table */
+/* ─── Audio player ──────────────────────────────────────────────────────── */
+.audio-hint {
+  font-size: 0.78rem;
+  color: var(--text-muted);
+  margin-bottom: 0.75rem;
+  line-height: 1.4;
+}
+
+/* Override native audio element to match dark theme */
+#demo-audio {
+  width: 100%;
+  border-radius: 8px;
+  accent-color: var(--accent);
+  filter: invert(1) hue-rotate(180deg) brightness(0.9);
+}
+
+/* ─── Gesture legend table ──────────────────────────────────────────────── */
 .gesture-legend table {
   width: 100%;
   border-collapse: collapse;
@@ -219,6 +250,94 @@ main {
 
 .gesture-legend td:first-child { font-size: 1.4rem; }
 
+/* ─── Photo modal ───────────────────────────────────────────────────────── */
+.modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.75);
+  backdrop-filter: blur(4px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 100;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.25s ease;
+}
+
+.modal-overlay.visible {
+  opacity: 1;
+  pointer-events: all;
+}
+
+.modal-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 1.5rem;
+  max-width: min(480px, 92vw);
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+  position: relative;
+  transform: translateY(12px);
+  transition: transform 0.25s ease;
+}
+
+.modal-overlay.visible .modal-card {
+  transform: translateY(0);
+}
+
+.modal-title {
+  font-size: 1.1rem;
+  font-weight: 700;
+  color: var(--text);
+}
+
+.modal-close {
+  position: absolute;
+  top: 0.75rem;
+  right: 0.75rem;
+  background: none;
+  border: none;
+  color: var(--text-muted);
+  font-size: 1.1rem;
+  cursor: pointer;
+  line-height: 1;
+  padding: 4px 8px;
+  border-radius: 6px;
+  transition: color 0.2s, background 0.2s;
+}
+
+.modal-close:hover {
+  color: var(--text);
+  background: var(--border);
+}
+
+.photo-preview {
+  width: 100%;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  object-fit: cover;
+  display: block;
+}
+
+.btn-download {
+  display: block;
+  text-align: center;
+  padding: 0.65rem 1.25rem;
+  background: linear-gradient(135deg, var(--accent2), var(--accent));
+  color: #000;
+  font-weight: 700;
+  font-size: 0.9rem;
+  border-radius: 8px;
+  text-decoration: none;
+  transition: opacity 0.2s;
+}
+
+.btn-download:hover { opacity: 0.85; }
+
 /* ─── Footer ────────────────────────────────────────────────────────────── */
 footer {
   text-align: center;
@@ -230,3 +349,10 @@ footer {
 
 footer a { color: var(--accent); text-decoration: none; }
 footer a:hover { text-decoration: underline; }
+
+/* ─── Responsive ────────────────────────────────────────────────────────── */
+@media (max-width: 720px) {
+  header h1  { font-size: 1.4rem; }
+  .panel     { max-width: 100%; }
+  main       { padding: 1rem; gap: 1rem; }
+}
