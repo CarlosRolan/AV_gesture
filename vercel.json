@@ -1,3 +1,6 @@
 {
-  "rootDirectory": "web"
+  "rootDirectory": "web",
+  "buildCommand": "",
+  "outputDirectory": ".",
+  "framework": null
 }
