@@ -36,10 +36,15 @@ const modalClose     = document.getElementById("modal-close");
 const loadingOverlay = document.getElementById("loading-overlay");
 const loadingStep    = document.getElementById("loading-step");
 const loadingHint    = document.getElementById("loading-hint");
+const holdCountdown  = document.getElementById("hold-countdown");
+const holdRingArc    = document.getElementById("hold-ring-arc");
+const holdSeconds    = document.getElementById("hold-seconds");
 
 // ── Config ────────────────────────────────────────────────────────────────
 const VOLUME_STEP         = 0.05;   // 5% per gesture trigger
 const GESTURE_DEBOUNCE_MS = 700;    // minimum ms between consecutive actions
+const HOLD_DURATION_MS    = 3000;   // ms to hold V-sign before photo
+const RING_CIRCUMFERENCE  = 2 * Math.PI * 40; // SVG circle r=40 → ≈251.3
 const MODEL_URL =
   "https://storage.googleapis.com/mediapipe-models/gesture_recognizer/gesture_recognizer/float16/1/gesture_recognizer.task";
 
@@ -48,12 +53,19 @@ let gestureRecognizer = null;
 let drawingUtils      = null;
 let lastActionTime    = 0;
 let modalOpen         = false;
+let holdStartTime     = null;   // timestamp when V-sign hold started
 
-// ── Gesture → action map ──────────────────────────────────────────────────
-const GESTURE_MAP = {
-  Victory:    { icon: "✌️", label: "V-Sign",      action: capturePhoto },
-  Thumb_Up:   { icon: "👍", label: "Thumbs Up",   action: volumeUp    },
-  Thumb_Down: { icon: "👎", label: "Thumbs Down", action: volumeDown  },
+// ── Gesture display info (UI only) ────────────────────────────────────────
+const GESTURE_DISPLAY = {
+  Victory:    { icon: "✌️", label: "Hold for photo…" },
+  Thumb_Up:   { icon: "👍", label: "Thumbs Up"       },
+  Thumb_Down: { icon: "👎", label: "Thumbs Down"     },
+};
+
+// ── Gesture → action map (non-Victory gestures) ───────────────────────────
+const GESTURE_ACTIONS = {
+  Thumb_Up:   volumeUp,
+  Thumb_Down: volumeDown,
 };
 
 // ── Audio & volume ─────────────────────────────────────────────────────────
@@ -77,6 +89,31 @@ function syncVolumeUI() {
 
 // Keep volume bar in sync if user drags the native audio control
 audioEl.addEventListener("volumechange", syncVolumeUI);
+
+// ── V-sign hold countdown ─────────────────────────────────────────────────
+function startHold() {
+  holdStartTime = performance.now();
+  holdRingArc.style.strokeDashoffset = RING_CIRCUMFERENCE;
+  holdSeconds.textContent = "3";
+  holdCountdown.classList.add("visible");
+}
+
+function updateHold() {
+  const elapsed  = performance.now() - holdStartTime;
+  const progress = Math.min(elapsed / HOLD_DURATION_MS, 1);
+  holdRingArc.style.strokeDashoffset = RING_CIRCUMFERENCE * (1 - progress);
+  holdSeconds.textContent = Math.ceil((HOLD_DURATION_MS - elapsed) / 1000);
+
+  if (progress >= 1) {
+    cancelHold();
+    capturePhoto();
+  }
+}
+
+function cancelHold() {
+  holdStartTime = null;
+  holdCountdown.classList.remove("visible");
+}
 
 // ── Photo capture ─────────────────────────────────────────────────────────
 function capturePhoto() {
@@ -128,27 +165,38 @@ function clearGestureUI() {
 
 // ── Gesture handler ───────────────────────────────────────────────────────
 function handleGesture(name, score) {
-  const info = GESTURE_MAP[name];
-  if (!info) {
+  const display = GESTURE_DISPLAY[name];
+  if (!display) {
+    // Unknown gesture — cancel any hold and clear UI
+    if (holdStartTime !== null) cancelHold();
     clearGestureUI();
-    statusBadge.textContent = "Listening…";
-    statusBadge.className   = "badge badge--ready";
     return;
   }
 
-  // Update gesture display
-  gestureIcon.textContent    = info.icon;
-  gestureLabel.textContent   = info.label;
+  // Update gesture display UI
+  gestureIcon.textContent    = display.icon;
+  gestureLabel.textContent   = display.label;
   confidenceBar.style.width  = `${Math.round(score * 100)}%`;
   confidenceText.textContent = `${Math.round(score * 100)}%`;
   statusBadge.textContent    = "Gesture detected";
   statusBadge.className      = "badge badge--active";
 
-  // Trigger action with debounce
-  const now = Date.now();
-  if (now - lastActionTime >= GESTURE_DEBOUNCE_MS) {
-    info.action();
-    lastActionTime = now;
+  if (name === "Victory") {
+    // V-sign: hold 3 s to capture photo
+    if (modalOpen) return;
+    if (holdStartTime === null) startHold();
+    else updateHold();
+  } else {
+    // Any non-Victory gesture cancels an ongoing hold
+    if (holdStartTime !== null) cancelHold();
+
+    // Trigger action with debounce
+    const action = GESTURE_ACTIONS[name];
+    const now = Date.now();
+    if (action && now - lastActionTime >= GESTURE_DEBOUNCE_MS) {
+      action();
+      lastActionTime = now;
+    }
   }
 }
 
@@ -184,6 +232,7 @@ function detect() {
     if (topGesture && topGesture.categoryName !== "None") {
       handleGesture(topGesture.categoryName, topGesture.score);
     } else {
+      if (holdStartTime !== null) cancelHold();
       clearGestureUI();
       statusBadge.textContent = "Listening…";
       statusBadge.className   = "badge badge--ready";

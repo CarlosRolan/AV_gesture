@@ -26,6 +26,15 @@
         <p id="loading-step" class="loading-step">Starting…</p>
         <p id="loading-hint" class="loading-hint"></p>
       </div>
+
+      <!-- Hold countdown ring — appears when V-sign is held -->
+      <div id="hold-countdown" class="hold-countdown">
+        <svg class="hold-ring" viewBox="0 0 100 100">
+          <circle class="hold-ring-bg"  cx="50" cy="50" r="40"/>
+          <circle id="hold-ring-arc" class="hold-ring-arc" cx="50" cy="50" r="40"/>
+        </svg>
+        <span id="hold-seconds" class="hold-seconds">3</span>
+      </div>
     </div>
 
     <!-- ── Right panel ────────────────────────────────────────────────── -->
