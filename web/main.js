@@ -33,6 +33,9 @@ const photoModal     = document.getElementById("photo-modal");
 const photoPreview   = document.getElementById("photo-preview");
 const photoDownload  = document.getElementById("photo-download");
 const modalClose     = document.getElementById("modal-close");
+const loadingOverlay = document.getElementById("loading-overlay");
+const loadingStep    = document.getElementById("loading-step");
+const loadingHint    = document.getElementById("loading-hint");
 
 // ── Config ────────────────────────────────────────────────────────────────
 const VOLUME_STEP         = 0.05;   // 5% per gesture trigger
@@ -190,6 +193,16 @@ function detect() {
   requestAnimationFrame(detect);
 }
 
+// ── Loading overlay helpers ───────────────────────────────────────────────
+function setLoading(step, hint = "") {
+  loadingStep.textContent = step;
+  loadingHint.textContent = hint;
+}
+
+function hideLoading() {
+  loadingOverlay.classList.add("hidden");
+}
+
 // ── Boot ──────────────────────────────────────────────────────────────────
 async function init() {
   statusBadge.textContent = "Loading model…";
@@ -197,6 +210,7 @@ async function init() {
 
   try {
     // 1. Resolve MediaPipe WASM binaries from CDN
+    setLoading("Downloading AI model…", "First load may take ~20 s — the model is ~10 MB");
     const vision = await FilesetResolver.forVisionTasks(
       "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@latest/wasm"
     );
@@ -217,6 +231,7 @@ async function init() {
     drawingUtils = new DrawingUtils(ctx);
 
     // 3. Request camera access
+    setLoading("Requesting camera…", "Allow camera access when your browser asks");
     statusBadge.textContent = "Requesting camera…";
     const stream = await navigator.mediaDevices.getUserMedia({
       video: { width: { ideal: 1280 }, height: { ideal: 720 }, facingMode: "user" },
@@ -227,6 +242,7 @@ async function init() {
 
     // 4. Start detection loop once the first frame is ready
     videoEl.addEventListener("loadeddata", () => {
+      hideLoading();
       statusBadge.textContent = "Listening…";
       statusBadge.className   = "badge badge--ready";
       detect();
@@ -234,9 +250,13 @@ async function init() {
 
   } catch (err) {
     console.error("Init error:", err);
-    statusBadge.textContent = err.name === "NotAllowedError"
+    const msg = err.name === "NotAllowedError"
       ? "Camera permission denied"
       : "Failed to load";
+    setLoading("⚠️ " + msg, err.name === "NotAllowedError"
+      ? "Click the camera icon in your browser's address bar to allow access"
+      : "Try refreshing the page");
+    statusBadge.textContent = msg;
     statusBadge.className = "badge badge--idle";
   }
 }

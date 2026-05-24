@@ -19,6 +19,13 @@
       <video id="webcam" autoplay playsinline muted></video>
       <canvas id="overlay"></canvas>
       <div id="status-badge" class="badge badge--idle">Initializing…</div>
+
+      <!-- Loading overlay — visible until camera is live -->
+      <div id="loading-overlay" class="loading-overlay">
+        <div class="loading-spinner"></div>
+        <p id="loading-step" class="loading-step">Starting…</p>
+        <p id="loading-hint" class="loading-hint"></p>
+      </div>
     </div>
 
     <!-- ── Right panel ────────────────────────────────────────────────── -->
