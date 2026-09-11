@@ -8,6 +8,8 @@
  *   ✌️  Victory     → capture photo + download modal
  *   👍  Thumb_Up    → audio volume up
  *   👎  Thumb_Down  → audio volume down
+ *   ✋  Open_Palm   → pause audio
+ *   ✊  Closed_Fist → play audio
  */
 
 // Pinned to a known-good version — "@latest" can silently pull in a
@@ -63,15 +65,19 @@ let holdStartTime     = null;   // timestamp when V-sign hold started
 
 // ── Gesture display info (UI only) ────────────────────────────────────────
 const GESTURE_DISPLAY = {
-  Victory:    { icon: "✌️", label: "Hold for photo…" },
-  Thumb_Up:   { icon: "👍", label: "Thumbs Up"       },
-  Thumb_Down: { icon: "👎", label: "Thumbs Down"     },
+  Victory:     { icon: "✌️", label: "Hold for photo…" },
+  Thumb_Up:    { icon: "👍", label: "Thumbs Up"       },
+  Thumb_Down:  { icon: "👎", label: "Thumbs Down"     },
+  Open_Palm:   { icon: "✋", label: "Stop"            },
+  Closed_Fist: { icon: "✊", label: "Play"            },
 };
 
 // ── Gesture → action map (non-Victory gestures) ───────────────────────────
 const GESTURE_ACTIONS = {
-  Thumb_Up:   volumeUp,
-  Thumb_Down: volumeDown,
+  Thumb_Up:    volumeUp,
+  Thumb_Down:  volumeDown,
+  Open_Palm:   pauseAudio,
+  Closed_Fist: playAudio,
 };
 
 // ── Audio & volume ─────────────────────────────────────────────────────────
@@ -91,6 +97,17 @@ function syncVolumeUI() {
   const pct = Math.round(audioEl.volume * 100);
   volumeBarEl.style.width   = `${pct}%`;
   volumeValueEl.textContent = pct;
+}
+
+function playAudio() {
+  audioEl.play()
+    .then(() => setAvAction("▶ Reproduciendo"))
+    .catch(() => setAvAction("⚠ Pulsa play una vez en el reproductor"));
+}
+
+function pauseAudio() {
+  audioEl.pause();
+  setAvAction("⏸ Pausado");
 }
 
 // Keep volume bar in sync if user drags the native audio control
