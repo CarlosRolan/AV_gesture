@@ -441,14 +441,40 @@ main {
 /* ─── Footer ────────────────────────────────────────────────────────────── */
 footer {
   text-align: center;
-  padding: 1rem;
+  padding: 1.75rem 1rem 2rem;
   border-top: 1px solid var(--border);
+}
+
+.btn-creator {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.6rem;
+  padding: 0.9rem 2.2rem;
+  background: linear-gradient(135deg, var(--accent2), var(--accent));
+  color: #000;
+  font-weight: 700;
+  font-size: 1.05rem;
+  border-radius: 999px;
+  text-decoration: none;
+  box-shadow: 0 4px 22px rgba(0, 229, 255, 0.25);
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.btn-creator:hover {
+  transform: translateY(-2px) scale(1.03);
+  box-shadow: 0 6px 30px rgba(0, 229, 255, 0.4);
+}
+
+.btn-creator:active { transform: translateY(0) scale(0.98); }
+
+.footer-sub {
+  margin-top: 0.85rem;
   font-size: 0.8rem;
   color: var(--text-muted);
 }
 
-footer a { color: var(--accent); text-decoration: none; }
-footer a:hover { text-decoration: underline; }
+.footer-sub a { color: var(--accent); text-decoration: none; }
+.footer-sub a:hover { text-decoration: underline; }
 
 /* ─── Responsive ────────────────────────────────────────────────────────── */
 @media (max-width: 720px) {
