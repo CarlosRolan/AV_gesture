@@ -10,11 +10,15 @@
  *   👎  Thumb_Down  → audio volume down
  */
 
+// Pinned to a known-good version — "@latest" can silently pull in a
+// breaking release (e.g. tasks-vision jumped 0.10.x → 1.0.x) and break
+// the deployed site with no code change on our side. Keep this in sync
+// with the version used in the FilesetResolver.forVisionTasks() call below.
 import {
   GestureRecognizer,
   FilesetResolver,
   DrawingUtils,
-} from "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@latest/vision_bundle.js";
+} from "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@1.0.1/vision_bundle.js";
 
 // ── DOM refs ──────────────────────────────────────────────────────────────
 const videoEl        = document.getElementById("webcam");
@@ -261,21 +265,32 @@ async function init() {
     // 1. Resolve MediaPipe WASM binaries from CDN
     setLoading("Downloading AI model…", "First load may take ~20 s — the model is ~10 MB");
     const vision = await FilesetResolver.forVisionTasks(
-      "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@latest/wasm"
+      "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@1.0.1/wasm"
     );
 
-    // 2. Create GestureRecognizer — model is fetched from Google's CDN
-    gestureRecognizer = await GestureRecognizer.createFromOptions(vision, {
-      baseOptions: {
-        modelAssetPath: MODEL_URL,
-        delegate: "GPU",
-      },
+    // 2. Create GestureRecognizer — model is fetched from Google's CDN.
+    // GPU delegate isn't reliably supported everywhere (Safari, many
+    // mobile browsers, machines without a usable WebGL context), so fall
+    // back to CPU instead of failing outright.
+    const recognizerOptions = {
       runningMode:                  "VIDEO",
       numHands:                     1,
       minHandDetectionConfidence:   0.7,
       minHandPresenceConfidence:    0.5,
       minTrackingConfidence:        0.5,
-    });
+    };
+    try {
+      gestureRecognizer = await GestureRecognizer.createFromOptions(vision, {
+        ...recognizerOptions,
+        baseOptions: { modelAssetPath: MODEL_URL, delegate: "GPU" },
+      });
+    } catch (gpuErr) {
+      console.warn("GPU delegate failed, falling back to CPU:", gpuErr);
+      gestureRecognizer = await GestureRecognizer.createFromOptions(vision, {
+        ...recognizerOptions,
+        baseOptions: { modelAssetPath: MODEL_URL, delegate: "CPU" },
+      });
+    }
 
     drawingUtils = new DrawingUtils(ctx);
 
@@ -304,7 +319,7 @@ async function init() {
       : "Failed to load";
     setLoading("⚠️ " + msg, err.name === "NotAllowedError"
       ? "Click the camera icon in your browser's address bar to allow access"
-      : "Try refreshing the page");
+      : `${err.message || err} — try refreshing the page`);
     statusBadge.textContent = msg;
     statusBadge.className = "badge badge--idle";
   }
