@@ -14,11 +14,13 @@
 // breaking release (e.g. tasks-vision jumped 0.10.x → 1.0.x) and break
 // the deployed site with no code change on our side. Keep this in sync
 // with the version used in the FilesetResolver.forVisionTasks() call below.
+// Use the .mjs bundle: since 1.0.x, vision_bundle.js is a global/IIFE
+// script (no `export` statements) and fails when imported as a module.
 import {
   GestureRecognizer,
   FilesetResolver,
   DrawingUtils,
-} from "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@1.0.1/vision_bundle.js";
+} from "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@1.0.1/vision_bundle.mjs";
 
 // ── DOM refs ──────────────────────────────────────────────────────────────
 const videoEl        = document.getElementById("webcam");
